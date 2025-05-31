@@ -6,6 +6,7 @@ A bare-bones implementation that we'll build up step by step.
 """
 
 import os
+import sys
 import json
 import random
 from pathlib import Path
@@ -15,6 +16,10 @@ from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
 from elevenlabs import play
 from pydub import AudioSegment
+from moviepy import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy.video.tools.subtitles import SubtitlesClip
+import math
+import whisper
 
 # We'll add imports as we implement each step
 # import openai
@@ -162,36 +167,96 @@ class SimplePipeline:
             print("No video files found in minecraft_videos/ directory")
             return None
         
-        # For now, just pick a random video
+        # Get random video
         selected_video = random.choice(video_files)
+        
+        # Convert audio duration to seconds
+        target_duration_s = target_duration / 1000
+        
+        # Get random clip from video
+        video = VideoFileClip(str(selected_video))
+        video_duration = video.duration
+        clip_start = random.randint(0, math.ceil(video_duration-target_duration_s))
+        clip = VideoFileClip(selected_video).subclipped(clip_start, clip_start+target_duration_s)
+        
+        # Save video as test
+        # clip.write_videofile("result.mp4")
+        
         print(f"Selected video: {selected_video.name}")
-        return str(selected_video)
+        return clip
     
     def step5_create_captions(self, audio_file):
         """Step 5: Generate captions"""
         print("Step 5: Creating captions...")
         
-        # TODO: Implement Whisper transcription
-        # For now, return placeholder captions
-        captions = [
-            {"text": "Once upon a time", "start": 0, "end": 2},
-            {"text": "a rubber duck", "start": 2, "end": 4},
-            {"text": "became the CEO", "start": 4, "end": 6}
-        ]
+        # Use whisper model to generate subtitle file
+        model = whisper.load_model('base')
+        result = model.transcribe(audio_file, word_timestamps=False)
+
+        # Create SRT file with proper format
+        srt_file = self.output_dir / 'captions.srt'
+
+        def format_srt_timestamp(seconds):
+            """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)"""
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            milliseconds = int((seconds % 1) * 1000)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
+
+        with open(srt_file, "w", encoding='utf-8') as f:
+            for i, segment in enumerate(result["segments"], 1):
+                start_time = format_srt_timestamp(segment["start"])
+                end_time = format_srt_timestamp(segment["end"])
+                text = segment["text"].strip()
+                
+                # Write SRT format
+                f.write(f"{i}\n")
+                f.write(f"{start_time} --> {end_time}\n")
+                f.write(f"{text}\n\n")
+
+        print(f"Created SRT file with {len(result['segments'])} segments")
+
+        # Use moviepy to generate a subtitle clip
+        generator = lambda text: TextClip(
+            text=text,
+            font='impact.ttf', 
+            font_size=60,          # Use 'fontsize' instead of 'font_size'
+            color='white'
+        ).with_position('center')
         
-        print(f"Created {len(captions)} caption segments")
-        return captions
+        subtitles = SubtitlesClip(str(srt_file), make_textclip=generator, encoding='utf-8')
+        
+        print(f"Caption clip created")
+        return subtitles
     
-    def step6_merge_video(self, video_file, audio_file, captions):
+    def step6_merge_video(self, video, audio_file, captions):
         """Step 6: Merge video, audio, and captions"""
         print("Step 6: Merging video components...")
         
-        # TODO: Implement MoviePy video editing
-        # For now, just copy the original video
+        # Load audio clip
+        audio = AudioFileClip(audio_file)
+        duration = audio.duration
+        
+        video_w_audio = video.with_audio(audio)
+        
+        if captions is not None:
+            print(f"Adding captions")
+            final_video = CompositeVideoClip([video_w_audio, captions])
+        else:
+            print(f"No captions to add")
+            final_video = video_w_audio
+            
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = self.output_dir / f"final_video_{timestamp}.mp4"
         
-        print(f"Video merge placeholder - would create: {output_file}")
+        print(f"Rendering final video: {output_file}")
+        print("This may take a few minutes...")
+        
+        # Write the final video file
+        final_video.write_videofile(str(output_file), fps=24)
+        
+        print(f"Video Merged: {output_file}")
         return str(output_file)
     
     def step7_upload_youtube(self, video_file, story_text):
@@ -276,9 +341,18 @@ def test_step(step_number):
     elif step_number == 3:
         return pipeline.step3_add_music("story_audio_20250530_153827.mp3")
     elif step_number == 4:
-        return pipeline.step4_select_video(45)
+        audio = AudioSegment.from_file(pipeline.output_dir / "speech_with_music_20250530_161201.mp3")
+        duration = len(audio)
+        return pipeline.step4_select_video(duration)
     elif step_number == 5:
-        return pipeline.step5_create_captions("test_audio.mp3")
+        return pipeline.step5_create_captions("output/speech_with_music_20250530_161201.mp3")
+    elif step_number == 6:
+        audio_file = pipeline.output_dir / "speech_with_music_20250530_161201.mp3"
+        audio = AudioSegment.from_file(audio_file)
+        duration = len(audio)
+        clip =  pipeline.step4_select_video(duration)
+        captions =  pipeline.step5_create_captions("output/speech_with_music_20250530_161201.mp3")
+        return pipeline.step6_merge_video(clip, audio_file, captions)
     else:
         print("Invalid step number (1-7)")
 
