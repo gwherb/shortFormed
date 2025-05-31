@@ -10,6 +10,11 @@ import json
 import random
 from pathlib import Path
 from datetime import datetime
+from openai import OpenAI
+from dotenv import load_dotenv
+from elevenlabs.client import ElevenLabs
+from elevenlabs import play
+from pydub import AudioSegment
 
 # We'll add imports as we implement each step
 # import openai
@@ -17,12 +22,18 @@ from datetime import datetime
 # from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
 # import whisper
 
+load_dotenv()
+
 class SimplePipeline:
     def __init__(self):
         self.config = self.load_config()
         self.video_dir = Path("minecraft_videos")
         self.output_dir = Path("output")
+        self.music_dir = Path("background_music")
         self.output_dir.mkdir(exist_ok=True)
+        self.openai_client = OpenAI(api_key=self.config["openai_api_key"])
+        self.elabs_client = ElevenLabs(api_key=self.config["elevenlabs_api_key"])
+        
     
     def load_config(self):
         """Load basic configuration"""
@@ -47,34 +58,99 @@ class SimplePipeline:
         """Step 1: Generate story using LLM"""
         print("Step 1: Generating story...")
         
-        # TODO: Implement OpenAI story generation
-        # For now, return a test story
-        story = "Once upon a time, a rubber duck became the CEO of a major corporation after being accidentally elected during a board meeting mix-up."
+        try:
+            prompt = f"Generate a short story about {self.config['story_theme']} in 6-8 sentences. Only include the story without additional text such as a title. Make the story from the perspective of one of the characters. Make it entertaining, engaging, and suitable for a short video. Additionally, use language for a modern audience, avoid formal or corporate langueage."
+            
+            response = self.openai_client.responses.create(
+                model='gpt-4.1',
+                input=prompt
+            )
+            
+            story = response.output_text
+        except Exception as e:
+            print(f"Error generating story: \n{e}")
+            story = None
         
-        print(f"Generated story: {story[:50]}...")
+        if story:
+            print(f"Generated story: {story[:50]}...")
         return story
     
     def step2_text_to_speech(self, story_text):
         """Step 2: Convert text to speech"""
         print("Step 2: Converting text to speech...")
         
-        # TODO: Implement ElevenLabs TTS
-        # For now, create a placeholder file
-        audio_file = self.output_dir / "test_audio.txt"
-        with open(audio_file, 'w') as f:
-            f.write(story_text)
+        try:
+            audio = self.elabs_client.text_to_speech.convert(
+                text=story_text,
+                voice_id="cgSgspJ2msm6clMCkdW9",
+                model_id="eleven_multilingual_v2",
+                output_format="mp3_44100_128"
+            )
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            audio_file = self.output_dir / f"story_audio_{timestamp}.mp3"
+            
+            with open(audio_file, 'wb') as f:
+                for chunk in audio:
+                    f.write(chunk)
         
-        print(f"Audio file created: {audio_file}")
-        return str(audio_file)
+        except Exception as e:
+            print(f"Error generating speech audio: \n{e}")
+            audio = None
+        
+        if audio:
+            print(f"Audio file created: {audio_file}")
+        return audio, audio_file
     
     def step3_add_music(self, audio_file):
         """Step 3: Add background music (optional)"""
         print("Step 3: Adding background music...")
         
-        # TODO: Implement music mixing
-        # For now, just return the same file
-        print("Music addition skipped for now")
-        return audio_file
+        try:
+            music_files = list(self.music_dir.glob("*.mp3")) + list(self.music_dir.glob("*.wav")) + list(self.music_dir.glob("*.m4a"))
+
+            if not music_files:
+                print("No background music found")
+                return audio_file
+            
+            file_num = random.randint(0, len(music_files))
+            music_file = music_files[0]
+            
+            speech = AudioSegment.from_file(self.output_dir / audio_file)
+            music = AudioSegment.from_file(str(music_file))
+            
+            background_volume_reduction = 15 # dB to reduce
+            quiet_music = music - background_volume_reduction
+            
+            speech_duration = len(speech)
+            
+            # Loop music if needed
+            if len(quiet_music) < speech_duration:
+                loops_needed = (speech_duration // len(quiet_music)) + 1
+                quiet_music = quiet_music * loops_needed
+            
+            # Trim music to exact speech length
+            quiet_music = quiet_music[:speech_duration]
+            
+            # fade music in and out
+            fade_duration = min(3000, speech_duration // 10) # 3 seconds or 10% of speech duration
+            quiet_music = quiet_music.fade_in(fade_duration).fade_out(fade_duration)
+            
+            # overlay speech on top of music
+            final_audio = quiet_music.overlay(speech)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = self.output_dir / f"speech_with_music_{timestamp}.mp3"
+            
+            final_audio.export(str(output_file), format='mp3', bitrate='192K')
+            
+            print(f"Succesfully added background music")
+        
+        except Exception as e:
+            print(f"Error applying background music to speech: \n{e}")
+            final_audio = None
+            
+        return str(final_audio)
     
     def step4_select_video(self, target_duration):
         """Step 4: Select video from catalog"""
@@ -190,10 +266,15 @@ def test_step(step_number):
     if step_number == 1:
         return pipeline.step1_generate_story()
     elif step_number == 2:
-        story = "Test story for TTS"
-        return pipeline.step2_text_to_speech(story)
+        story = pipeline.step1_generate_story()
+        audio, audio_file = pipeline.step2_text_to_speech(story)
+        
+        if audio:
+            play(audio)
+        
+        return audio
     elif step_number == 3:
-        return pipeline.step3_add_music("test_audio.mp3")
+        return pipeline.step3_add_music("story_audio_20250530_153827.mp3")
     elif step_number == 4:
         return pipeline.step4_select_video(45)
     elif step_number == 5:
