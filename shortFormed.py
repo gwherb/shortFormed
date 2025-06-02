@@ -24,6 +24,7 @@ import whisper_timestamped as whisper
 from utils import *
 import cv2
 import subprocess
+import captacity
 
 # We'll add imports as we implement each step
 # import openai
@@ -221,76 +222,38 @@ class SimplePipeline:
         """
         print(f"Step 6: Adding {caption_mode}-level captions to video")
         
+        # Load video and audio and merge
+        video = VideoFileClip(video_file)
+        audio = AudioFileClip(audio_file)
+        video = video.with_audio(audio)
+        
         # Parse captions based on mode
         if caption_mode == 'word':
-            with open(captions['word_level'], 'r', encoding='utf-8') as f:
-                caption_content = f.read()
+            caption_content = captions['word_level']
         else:  # phrase mode
-            with open(captions['phrase_level'], 'r', encoding='utf-8') as f:
-                caption_content = f.read()
+            caption_content = captions['phrase_level']
         
-        subtitles = parse_srt(caption_content)
-        print(f"Loaded {len(subtitles)} caption segments")
+        generator = lambda text: TextClip(
+            text=text,
+            font='KOMIKAX_.ttf',
+            font_size=80,
+            margin=(200, 200),
+            color='white',
+            stroke_color='black',
+            stroke_width=15
+            # method='caption'
+            )
+
+        sub = SubtitlesClip(caption_content, make_textclip=generator, encoding='utf-8')
         
-        # Create output video with captions
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        captioned_video = self.output_dir / f"captioned_video_{caption_mode}_{timestamp}.mp4"
+        positioned_sub = sub.with_position(('center', 'center'))
+
+        # subtitles = SubtitlesClip(caption_content, generator)
+        result = CompositeVideoClip([video, positioned_sub])
         
-        # Open video capture
-        cap = cv2.VideoCapture(str(video_file))
-        if not cap.isOpened():
-            raise ValueError(f"Could not open video file: {video_file}")
+        result.write_videofile("output.mp4", fps=10)
         
-        # Get video properties
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        print(f"Video properties: {width}x{height} @ {fps} fps, {total_frames} frames")
-        
-        # Setup high-quality video writer
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(str(captioned_video), fourcc, fps, (width, height))
-        
-        # Check if writer opened successfully
-        if not out.isOpened():
-            raise ValueError("Could not open video writer")
-        
-        frame_number = 0
-        ret, frame = cap.read()
-        
-        while ret:
-            current_time = frame_number / fps
-            
-            # Find active caption
-            active_caption = ""
-            for caption in subtitles:
-                if caption['start'] <= current_time <= caption['end']:
-                    active_caption = caption['text']
-                    break
-            
-            # Add caption to frame if active
-            if active_caption:
-                frame = add_text_to_frame(frame, active_caption, width, height, caption_mode)
-            
-            out.write(frame)
-            
-            # Progress indicator
-            if frame_number % int(fps * 5) == 0:  # Every 5 seconds
-                progress = (frame_number / total_frames) * 100
-                print(f"Processing: {progress:.1f}% complete")
-            
-            frame_number += 1
-            ret, frame = cap.read()
-        
-        # Release resources
-        cap.release()
-        out.release()
-        cv2.destroyAllWindows()
-        
-        print(f"✅ Captioned video saved: {captioned_video}")
-        return str(captioned_video)
+        return "Returned"
     
     def step7_upload_youtube(self, video_file, story_text):
         """Step 7: Upload to YouTube"""
