@@ -19,7 +19,11 @@ from pydub import AudioSegment
 from moviepy import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
 from moviepy.video.tools.subtitles import SubtitlesClip
 import math
-import whisper
+# import whisper
+import whisper_timestamped as whisper
+from utils import *
+import cv2
+import subprocess
 
 # We'll add imports as we implement each step
 # import openai
@@ -180,84 +184,113 @@ class SimplePipeline:
         clip = VideoFileClip(selected_video).subclipped(clip_start, clip_start+target_duration_s)
         
         # Save video as test
-        # clip.write_videofile("result.mp4")
+        output_file = "clip.mp4"
+        clip.write_videofile(output_file)
         
         print(f"Selected video: {selected_video.name}")
-        return clip
+        return output_file
     
     def step5_create_captions(self, audio_file):
         """Step 5: Generate captions"""
         print("Step 5: Creating captions...")
         
         # Use whisper model to generate subtitle file
-        model = whisper.load_model('base')
-        result = model.transcribe(audio_file, word_timestamps=False)
-
-        # Create SRT file with proper format
-        srt_file = self.output_dir / 'captions.srt'
-
-        def format_srt_timestamp(seconds):
-            """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)"""
-            hours = int(seconds // 3600)
-            minutes = int((seconds % 3600) // 60)
-            secs = int(seconds % 60)
-            milliseconds = int((seconds % 1) * 1000)
-            return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
-
-        with open(srt_file, "w", encoding='utf-8') as f:
-            for i, segment in enumerate(result["segments"], 1):
-                start_time = format_srt_timestamp(segment["start"])
-                end_time = format_srt_timestamp(segment["end"])
-                text = segment["text"].strip()
-                
-                # Write SRT format
-                f.write(f"{i}\n")
-                f.write(f"{start_time} --> {end_time}\n")
-                f.write(f"{text}\n\n")
-
-        print(f"Created SRT file with {len(result['segments'])} segments")
-
-        # Use moviepy to generate a subtitle clip
-        generator = lambda text: TextClip(
-            text=text,
-            font='impact.ttf', 
-            font_size=60,          # Use 'fontsize' instead of 'font_size'
-            color='white'
-        ).with_position('center')
+        audio = whisper.load_audio(audio_file)
+        model = whisper.load_model("base")
+        result = whisper.transcribe(model, audio)
         
-        subtitles = SubtitlesClip(str(srt_file), make_textclip=generator, encoding='utf-8')
-        
-        print(f"Caption clip created")
-        return subtitles
-    
-    def step6_merge_video(self, video, audio_file, captions):
-        """Step 6: Merge video, audio, and captions"""
-        print("Step 6: Merging video components...")
-        
-        # Load audio clip
-        audio = AudioFileClip(audio_file)
-        duration = audio.duration
-        
-        video_w_audio = video.with_audio(audio)
-        
-        if captions is not None:
-            print(f"Adding captions")
-            final_video = CompositeVideoClip([video_w_audio, captions])
-        else:
-            print(f"No captions to add")
-            final_video = video_w_audio
+        word_level = create_word_level_subtitles(result, 'word_level.srt')
+        phrase_level = create_phrase_level_subtitles(result, 'phrase_level.srt')
             
+        print(f"Caption clip created")
+        captions = {
+            'word_level': word_level,
+            'phrase_level': phrase_level
+        }
+        
+        return captions
+    
+    def step6_merge_video(self, video_file, audio_file, captions, caption_mode='word'):
+        """Step 6: Add captions to video using OpenCV
+        
+        Args:
+            video_file: Path to input video
+            audio_file: Path to audio (not used in this version)
+            captions: Dict with 'word_level' and 'phrase_level' SRT file paths
+            caption_mode: 'word' for word-level captions, 'phrase' for phrase-level captions
+        """
+        print(f"Step 6: Adding {caption_mode}-level captions to video")
+        
+        # Parse captions based on mode
+        if caption_mode == 'word':
+            with open(captions['word_level'], 'r', encoding='utf-8') as f:
+                caption_content = f.read()
+        else:  # phrase mode
+            with open(captions['phrase_level'], 'r', encoding='utf-8') as f:
+                caption_content = f.read()
+        
+        subtitles = parse_srt(caption_content)
+        print(f"Loaded {len(subtitles)} caption segments")
+        
+        # Create output video with captions
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = self.output_dir / f"final_video_{timestamp}.mp4"
+        captioned_video = self.output_dir / f"captioned_video_{caption_mode}_{timestamp}.mp4"
         
-        print(f"Rendering final video: {output_file}")
-        print("This may take a few minutes...")
+        # Open video capture
+        cap = cv2.VideoCapture(str(video_file))
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video file: {video_file}")
         
-        # Write the final video file
-        final_video.write_videofile(str(output_file), fps=24)
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        print(f"Video Merged: {output_file}")
-        return str(output_file)
+        print(f"Video properties: {width}x{height} @ {fps} fps, {total_frames} frames")
+        
+        # Setup high-quality video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(str(captioned_video), fourcc, fps, (width, height))
+        
+        # Check if writer opened successfully
+        if not out.isOpened():
+            raise ValueError("Could not open video writer")
+        
+        frame_number = 0
+        ret, frame = cap.read()
+        
+        while ret:
+            current_time = frame_number / fps
+            
+            # Find active caption
+            active_caption = ""
+            for caption in subtitles:
+                if caption['start'] <= current_time <= caption['end']:
+                    active_caption = caption['text']
+                    break
+            
+            # Add caption to frame if active
+            if active_caption:
+                frame = add_text_to_frame(frame, active_caption, width, height, caption_mode)
+            
+            out.write(frame)
+            
+            # Progress indicator
+            if frame_number % int(fps * 5) == 0:  # Every 5 seconds
+                progress = (frame_number / total_frames) * 100
+                print(f"Processing: {progress:.1f}% complete")
+            
+            frame_number += 1
+            ret, frame = cap.read()
+        
+        # Release resources
+        cap.release()
+        out.release()
+        cv2.destroyAllWindows()
+        
+        print(f"✅ Captioned video saved: {captioned_video}")
+        return str(captioned_video)
     
     def step7_upload_youtube(self, video_file, story_text):
         """Step 7: Upload to YouTube"""
@@ -348,14 +381,10 @@ def test_step(step_number):
         return pipeline.step5_create_captions("output/speech_with_music_20250530_161201.mp3")
     elif step_number == 6:
         audio_file = pipeline.output_dir / "speech_with_music_20250530_161201.mp3"
-        audio = AudioSegment.from_file(audio_file)
-        duration = len(audio)
-        clip =  pipeline.step4_select_video(duration)
+        clip_file = "clip.mp4"
         captions =  pipeline.step5_create_captions("output/speech_with_music_20250530_161201.mp3")
-        return pipeline.step6_merge_video(clip, audio_file, captions)
+        return pipeline.step6_merge_video(clip_file, audio_file, captions)
     else:
         print("Invalid step number (1-7)")
 
-# Usage examples:
-# python pipeline.py                    # Run full pipeline
-# python -c "from pipeline import test_step; test_step(1)"  # Test step 1
+
