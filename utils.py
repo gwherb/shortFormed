@@ -1,4 +1,7 @@
 import cv2
+from moviepy import TextClip
+import re
+from pydantic import BaseModel
 
 def create_word_level_subtitles(whisper_result, output_file="subtitles.srt"):
     """
@@ -28,7 +31,7 @@ def create_word_level_subtitles(whisper_result, output_file="subtitles.srt"):
         words = segment.get("words", [])
         
         for word in words:
-            word_text = word["text"].strip()
+            word_text = re.sub(r"[^\w\s']", "", word["text"].strip())
             if not word_text:  # Skip empty words
                 continue
                 
@@ -54,7 +57,7 @@ def create_word_level_subtitles(whisper_result, output_file="subtitles.srt"):
     
     return output_file
 
-def create_phrase_level_subtitles(whisper_result, output_file="phrase_subtitles.srt", words_per_subtitle=3):
+def create_phrase_level_subtitles(whisper_result, output_file="phrase_subtitles.srt", phrase_timing=0.2):
     """
     Create SRT subtitle file with multiple words per subtitle
     
@@ -85,11 +88,13 @@ def create_phrase_level_subtitles(whisper_result, output_file="phrase_subtitles.
         for word in words:
             if word["text"].strip():  # Skip empty words
                 all_words.append(word)
-    
+                    
     # Group words into phrases
-    for i in range(0, len(all_words), words_per_subtitle):
-        word_group = all_words[i:i + words_per_subtitle]
-        
+    i = 0
+    while i < len(all_words):
+        word_group = [word for word in all_words[i:] if word["start"] - all_words[i]["start"] < phrase_timing]
+        i = i + len(word_group)
+                
         if not word_group:
             continue
             
@@ -98,7 +103,7 @@ def create_phrase_level_subtitles(whisper_result, output_file="phrase_subtitles.
         end_time = format_timestamp(word_group[-1]["end"])
         
         # Combine word texts
-        phrase_text = " ".join(word["text"].strip() for word in word_group)
+        phrase_text = " ".join(re.sub(r"[^\w\s'-]", "", word["text"].strip()) for word in word_group)
         
         # Create SRT entry for this phrase
         subtitle_lines.append(f"{subtitle_index}")
@@ -119,30 +124,40 @@ def create_phrase_level_subtitles(whisper_result, output_file="phrase_subtitles.
     
     return output_file
 
-def parse_srt(srt_content):
-    """Parse SRT subtitle content"""
-    subtitles = []
-    blocks = srt_content.strip().split('\n\n')
+def parse_srt_file(srt_content):
+    """Parse SRT content and return list of subtitle dictionaries"""
+    import re
     
-    for block in blocks:
-        lines = block.strip().split('\n')
-        if len(lines) >= 3:
-            # index = lines[0]
-            time_range = lines[1]
-            text = ' '.join(lines[2:])
-            
-            # Parse time range: "00:00:01,000 --> 00:00:03,500"
-            start_str, end_str = time_range.split(' --> ')
-            start_time = srt_time_to_seconds(start_str)
-            end_time = srt_time_to_seconds(end_str)
-            
-            subtitles.append({
-                'start': start_time,
-                'end': end_time,
-                'text': text
-            })
+    # If srt_content is a file path, read it
+    if isinstance(srt_content, str) and srt_content.endswith('.srt'):
+        with open(srt_content, 'r', encoding='utf-8') as f:
+            content = f.read()
+    else:
+        content = srt_content
+    
+    # Parse SRT format
+    pattern = r'(\d+)\s*\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s*\n(.*?)(?=\n\d+\s*\n|\Z)'
+    matches = re.findall(pattern, content, re.DOTALL)
+    
+    subtitles = []
+    for match in matches:
+        start_time = srt_time_to_seconds(match[1])
+        end_time = srt_time_to_seconds(match[2])
+        text = match[3].strip()
+        
+        subtitles.append({
+            'text': text,
+            'start': start_time,
+            'end': end_time
+        })
     
     return subtitles
+
+def srt_time_to_seconds(time_str):
+    """Convert SRT time format to seconds"""
+    h, m, s_ms = time_str.split(':')
+    s, ms = s_ms.split(',')
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
 
 def srt_time_to_seconds(time_str):
     """Convert SRT time format to seconds"""
@@ -224,3 +239,42 @@ def add_text_to_frame(frame, text, width, height, caption_mode='phrase'):
         cv2.putText(frame, line, (text_x, text_y), font, font_scale, color, thickness)
     
     return frame
+
+def create_custom_subtitles(self, subtitle_data):
+    """Create a list of TextClips with custom effects"""
+    text_clips = []
+    
+    for i, subtitle in enumerate(subtitle_data):
+        # Alternating colors
+        color = 'lime' if i % 2 == 0 else 'cyan'
+        
+        # You can add different effects based on position, timing, etc.
+        if i % 5 == 0:  # Every 5th word gets special treatment
+            font_size = 100
+            position = ('center', 200)  # Higher up
+        else:
+            font_size = 80
+            position = 'center'
+        
+        text_clip = TextClip(
+            text=subtitle['text'],
+            font='KOMIKAX_.ttf',
+            font_size=font_size,
+            color=color,
+            stroke_color='black',
+            stroke_width=15
+        ).with_position(position).with_start(subtitle['start']).with_end(subtitle['end'])
+        
+        # Add fade in/out effects
+        text_clip = text_clip.crossfadein(0.1).crossfadeout(0.1)
+        
+        text_clips.append(text_clip)
+    
+    return text_clips
+
+class StructuredResponse(BaseModel):
+    story: str
+    title: str
+    description: str
+    tags: list[str]
+    gender: str
