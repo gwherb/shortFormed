@@ -4,3 +4,7 @@ credentials.json
 # *.mp3
 # *.wav
 # *.avi
+temp/
+long_videos/
+short_videos/
+minecraft_videos/

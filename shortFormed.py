@@ -24,6 +24,12 @@ import whisper_timestamped as whisper
 from youtube_upload.client import YoutubeUploader
 from utils import *
 
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+
 
 # We'll add imports as we implement each step
 # import openai
@@ -42,6 +48,8 @@ class SimplePipeline:
         self.long_output_dir = Path("long_videos")
         self.long_output_dir.mkdir(exist_ok=True)
         self.temp_dir = Path("temp")
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(exist_ok=True)
         self.music_dir = Path("background_music")
         self.openai_client = OpenAI(api_key=self.config["openai_api_key"])
@@ -64,6 +72,30 @@ class SimplePipeline:
                 json.dump(config, f, indent=2)
             print("Created config.json - please update with your API keys")
             return config
+        
+    def authenticate_youtube(self):
+        """Authenticate with YouTube API"""
+        SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+        
+        creds = None
+        # Check if token.json exists (saved credentials)
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        
+        # If there are no valid credentials, let the user log in
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'credentials.json', SCOPES)  # Your OAuth client secrets file
+                creds = flow.run_local_server(port=0)
+            
+            # Save credentials for next run
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+        
+        return build('youtube', 'v3', credentials=creds)
     
     def step1_generate_story(self):
         """Step 1: Generate story using LLM"""
@@ -114,17 +146,17 @@ class SimplePipeline:
         print("Step X: Generating Reddit Image...")
         
         title_text = title_text.replace("|", "\n")
-        
-        title_len = len(title_text)
-        size_correction = (40 - title_len)/25 if title_len < 40 else 1
-        
         image = ImageClip("reddit_template.png")
+        
+        text_box_width = 1500   # pixels
+        text_box_height = 450  # pixels
         
         title_overlay = TextClip(
             text=title_text,
-            size=(int(0.8 * size_correction * image.size[0]), int(0.8 * size_correction * image.size[1])),
+            size=(text_box_width, text_box_height),
             font="impact.ttf",
             color="black",
+            method='caption',
             margin=(200,200)
         ).with_position(('center', 'center'))
         
@@ -138,7 +170,7 @@ class SimplePipeline:
         
         final_image = CompositeVideoClip([image, title_overlay, username_overlay])
         
-        image_output = self.temp_dir / "overlay.png"
+        image_output = self.temp_dir / f"overlay.png"
         
         final_image.save_frame(image_output)
         
@@ -148,7 +180,7 @@ class SimplePipeline:
         """Step 2: Convert text to speech"""
         print("Step 2: Converting text to speech...")
         
-        voice_id = 'onwK4e9ZLuTAKqWW03F9' if gender == 'M' else 'cgSgspJ2msm6clMCkdW9'
+        voice_id = 'pNInz6obpgDQGcFmaJgB' if gender == 'M' else 'cgSgspJ2msm6clMCkdW9'
         
         try:
             audio = self.elabs_client.text_to_speech.convert(
@@ -250,7 +282,11 @@ class SimplePipeline:
         
         # Save video as test
         output_file = self.temp_dir / "clip.mp4"
-        clip.write_videofile(output_file)
+        clip.write_videofile(
+            output_file,
+            codec='h264_videotoolbox',  # Use Mac hardware encoder
+            ffmpeg_params=['-preset', 'ultrafast']  # Fast encoding
+        )
         
         print(f"Selected video: {selected_video.name}")
         return output_file
@@ -264,8 +300,8 @@ class SimplePipeline:
         model = whisper.load_model("small")
         result = whisper.transcribe(model, audio)
         
-        word_level = create_word_level_subtitles(result, 'word_level.srt')
-        phrase_level = create_phrase_level_subtitles(result, 'phrase_level.srt')
+        word_level = create_word_level_subtitles(result, self.temp_dir / 'word_level.srt')
+        phrase_level = create_phrase_level_subtitles(result, self.temp_dir /  'phrase_level.srt')
             
         print(f"Caption clip created")
         captions = {
@@ -281,9 +317,9 @@ class SimplePipeline:
         
         # Load in image overlay
         reddit_image = ImageClip(reddit_image)
-        reddit_image = reddit_image.resized(1/4)
+        reddit_image = reddit_image.resized(1/2)
         reddit_image = reddit_image.with_position(('center', 'center'))
-        reddit_image = reddit_image.with_duration(2.5)
+        reddit_image = reddit_image.with_duration(2.75)
         
         # Load video and audio
         video = VideoFileClip(video_file)
@@ -306,7 +342,7 @@ class SimplePipeline:
             text_clip = TextClip(
                 text=subtitle['text'],
                 font='KOMIKAX_.ttf',
-                font_size=60,
+                font_size=90,
                 color=color,
                 stroke_color='black',
                 stroke_width=10,
@@ -323,7 +359,16 @@ class SimplePipeline:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = self.long_output_dir / f"long_video_{timestamp}.mp4"
         
-        result.write_videofile(output_file, fps=24)
+        result.write_videofile(
+                output_file,
+                fps=30,
+                codec='h264_videotoolbox',  # Hardware encoder
+                ffmpeg_params=[
+                    '-pix_fmt', 'yuv420p',
+                    '-crf', '23',  # Quality setting (lower = better quality)
+                    '-movflags', '+faststart'  # Optimize for streaming
+                ]
+            )
         return output_file
     
     def stepY_crop_video(self, video_file):
@@ -337,7 +382,14 @@ class SimplePipeline:
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = self.short_output_dir / f"short_video_{timestamp}.mp4"
-        video.write_videofile(output_file)
+        video.write_videofile(
+                output_file,
+                codec='h264_videotoolbox',  # Hardware encoder
+                ffmpeg_params=[
+                    '-pix_fmt', 'yuv420p',
+                    '-crf', '23'
+                ]
+            )
         
         thumbnail_file = self.temp_dir / "thumbnail.png"
         video.save_frame(thumbnail_file, t=0)
@@ -371,6 +423,31 @@ class SimplePipeline:
         
         except Exception as e:
             print(f"Error uploading video: {e}")
+            response = "Error"
+        
+        return response
+    
+    def step8_upload_thumbnail(self, thumbnail, video_response):
+        """Step 8: Upload thumbnail to YouTube Video"""
+        print("Step 8: Uploading Thumbnail")
+        
+        # Parse video ID from response
+        id = video_response[0]['id']
+        
+        try:
+            # Authenticate using YouTube API
+            youtube = self.authenticate_youtube()
+            
+            request = youtube.thumbnails().set(
+                videoId=id,
+                media_body=MediaFileUpload(thumbnail, mimetype="image/png")
+            )
+            
+            response = request.execute()
+            
+        except Exception as e:
+            print(f"Error uploading thumbnail: {e}")
+            response = "Error"
         
         return response
     
@@ -408,17 +485,15 @@ class SimplePipeline:
             cropped_video, thumbnail_file = self.stepY_crop_video(merged_video)
             
             # Step 7: Upload
-            youtube_url = self.step7_upload_youtube(cropped_video, title, description, tags)
+            youtube_response = self.step7_upload_youtube(cropped_video, title, description, tags)
             
-            # Clear temp directory
-            if os.path.exists(self.temp_dir):
-                shutil.rmtree(self.temp_dir)
+            # Step 8: Thumbnail
+            thumbnail_response = self.step8_upload_thumbnail(thumbnail_file, youtube_response)
             
             print("=" * 50)
             print("Pipeline completed!")
-            print(f"Result: {youtube_url}")
             
-            return youtube_url
+            return thumbnail_response
             
         except Exception as e:
             print(f"Pipeline failed: {e}")
@@ -454,22 +529,28 @@ def test_step(step_number):
         duration = len(audio)
         return pipeline.step3_add_music("output/story_audio_20250602_214117.mp3", duration)
     elif step_number == 4:
-        audio = AudioSegment.from_file(pipeline.output_dir / "story_audio_20250602_214117.mp3")
-        duration = len(audio)
+        # audio = AudioSegment.from_file(pipeline.output_dir / "story_audio_20250602_214117.mp3")
+        duration = 3000
         return pipeline.step4_select_video(duration)
     elif step_number == 5:
         return pipeline.step5_create_captions("output/story_audio_20250602_214117.mp3")
     elif step_number == 6:
-        audio_file = pipeline.output_dir / "story_audio_20250602_214117.mp3"
-        clip_file = "clip.mp4"
-        captions =  pipeline.step5_create_captions("output/story_audio_20250602_214117.mp3")
-        return pipeline.step6_merge_video(clip_file, audio_file, captions)
+        audio_file = "test/speech_with_music_20250611_231207.mp3"
+        clip_file = "test/clip.mp4"
+        captions =  {"word_level": "test/word_level.srt", "phrase_level": "test/phrase_level.srt"}
+        reddit_image = "test/overlay.png"
+        return pipeline.step6_merge_video(clip_file, audio_file, captions, reddit_image)
     elif step_number == 7:
         return pipeline.step7_upload_youtube("output.mp4", "Test", "Test", ["test"])
     elif step_number == 8:
-        return pipeline.stepX_generate_reddit_image("Curtain Toga|Confessions")
+        # pipeline.stepX_generate_reddit_image("College Party Chaos|Gone Wild Mid-Proposal")
+        # pipeline.stepX_generate_reddit_image("Mascot Mishap|Caught on Camera")
+        return pipeline.stepX_generate_reddit_image("Mascot|Crashout")
+
     elif step_number == 9:
         return pipeline.stepY_crop_video('output.mp4')
+    elif step_number == 10:
+        return pipeline.step8_upload_thumbnail("temp/thumbnail.png", {"id": "VYQym1SATD8"})
     else:
         print("Invalid step number (1-7)")
 

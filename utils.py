@@ -15,6 +15,8 @@ def create_word_level_subtitles(whisper_result, output_file="subtitles.srt"):
         str: Path to the created subtitle file
     """
     
+    output_file = str(output_file)
+    
     def format_timestamp(seconds):
         """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)"""
         hours = int(seconds // 3600)
@@ -69,6 +71,8 @@ def create_phrase_level_subtitles(whisper_result, output_file="phrase_subtitles.
     Returns:
         str: Path to the created subtitle file
     """
+    
+    output_file = str(output_file)
     
     def format_timestamp(seconds):
         """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)"""
