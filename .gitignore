@@ -8,3 +8,6 @@ temp/
 long_videos/
 short_videos/
 minecraft_videos/
+*.json
+*.log
+*.txt

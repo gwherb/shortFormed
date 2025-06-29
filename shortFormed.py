@@ -17,7 +17,8 @@ from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
 from elevenlabs import play
 from pydub import AudioSegment
-from moviepy import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, ImageClip
+from pydub.effects import speedup
+from moviepy import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, ImageClip, CompositeAudioClip
 from moviepy.video.fx.Crop import Crop
 import math
 import whisper_timestamped as whisper
@@ -47,6 +48,8 @@ class SimplePipeline:
         self.short_output_dir.mkdir(exist_ok=True)
         self.long_output_dir = Path("long_videos")
         self.long_output_dir.mkdir(exist_ok=True)
+        self.thumbnail_dir = Path("thumbnails")
+        self.thumbnail_dir.mkdir(exist_ok=True)
         self.temp_dir = Path("temp")
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
@@ -176,7 +179,7 @@ class SimplePipeline:
         
         return image_output
     
-    def step2_text_to_speech(self, story, title, gender):
+    def step2_text_to_speech(self, story, title, gender, target_duration = 180 * 1000):
         """Step 2: Convert text to speech"""
         print("Step 2: Converting text to speech...")
         
@@ -187,9 +190,12 @@ class SimplePipeline:
                 text=title.replace("|", " ") + "\n\n" + story,
                 voice_id=voice_id,
                 model_id="eleven_multilingual_v2",
-                output_format="mp3_44100_128"
+                output_format="mp3_44100_128",
+                voice_settings={
+                    "speed": 1.2
+                }
             )
-
+            
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             audio_file = self.temp_dir / f"story_audio_{timestamp}.mp3"
             
@@ -204,8 +210,16 @@ class SimplePipeline:
         
         if audio:
             print(f"Audio file created: {audio_file}")
-            duration = len(AudioSegment.from_file(audio_file))
+            audio_loaded = AudioSegment.from_file(audio_file)
+            duration = len(audio_loaded)
             
+            if duration > target_duration:
+                speed_factor = duration / target_duration
+                corrected_audio = speedup(audio_loaded, speed_factor)
+                
+                corrected_audio.export(str(audio_file), format="mp3", bitrate='192K')
+                duration = target_duration
+                
         return audio, audio_file, duration
     
     def step3_add_music(self, audio_file, duration):
@@ -228,35 +242,58 @@ class SimplePipeline:
             background_volume_reduction = 15 # dB to reduce
             quiet_music = music - background_volume_reduction
             
-            speech_duration = duration
+            # Use speech duration in milliseconds (consistent units)
+            speech_duration_ms = len(speech)
+            music_duration_ms = len(quiet_music)
             
-            # Loop music if needed
-            if len(quiet_music) < speech_duration:
-                loops_needed = (speech_duration // len(quiet_music)) + 1
-                quiet_music = quiet_music * loops_needed
+            print(f"Speech duration: {speech_duration_ms/1000:.1f}s, Music duration: {music_duration_ms/1000:.1f}s")
             
-            # Trim music to exact speech length
-            quiet_music = quiet_music[:speech_duration]
+            # Create looped music to match speech duration
+            if music_duration_ms < speech_duration_ms:
+                # Calculate how many complete loops we need
+                loops_needed = speech_duration_ms // music_duration_ms
+                remainder_ms = speech_duration_ms % music_duration_ms
+                
+                print(f"Looping music {loops_needed} times + {remainder_ms/1000:.1f}s remainder")
+                
+                # Build the looped music efficiently
+                looped_music = AudioSegment.empty()
+                
+                # Add complete loops
+                for i in range(int(loops_needed)):
+                    looped_music += quiet_music
+                
+                # Add partial loop for remainder
+                if remainder_ms > 0:
+                    looped_music += quiet_music[:remainder_ms]
+                    
+                final_music = looped_music
+            else:
+                # Music is longer than speech, just trim it
+                print("Music is longer than speech, trimming to fit")
+                final_music = quiet_music[:speech_duration_ms]
             
-            # fade music in and out
-            fade_duration = min(3000, speech_duration // 10) # 3 seconds or 10% of speech duration
-            quiet_music = quiet_music.fade_in(fade_duration).fade_out(fade_duration)
+            # Verify final music length matches speech
+            print(f"Final music duration: {len(final_music)/1000:.1f}s")
             
-            # overlay speech on top of music
-            final_audio = quiet_music.overlay(speech)
+            # Add fade in/out (use smaller fade for short audio)
+            fade_duration = min(3000, speech_duration_ms // 10)  # 3 seconds or 10% of speech duration
+            final_music = final_music.fade_in(fade_duration).fade_out(fade_duration)
+            
+            # Overlay speech on top of music
+            final_audio = final_music.overlay(speech)
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = self.temp_dir / f"speech_with_music_{timestamp}.mp3"
             
-            final_audio.export(str(output_file), format='mp3', bitrate='192K')
+            final_audio.export(str(output_file), format='mp3', bitrate='192k')
             
-            print(f"Succesfully added background music")
+            print(f"Successfully added background music: {output_file}")
+            return str(output_file)
         
         except Exception as e:
             print(f"Error applying background music to speech: \n{e}")
-            output_file = None
-            
-        return output_file
+            return audio_file  # Return original file on error
     
     def step4_select_video(self, target_duration):
         """Step 4: Select video from catalog"""
@@ -402,7 +439,7 @@ class SimplePipeline:
         
         hashtags = " #shorts #youtubeshorts #viral #trending"
         extra_tags = ['shorts', 'viral', 'trending']
-        
+
         try:
             # Load uploader and authenticate
             uploader = YoutubeUploader(secrets_file_path='credentials.json')
@@ -429,10 +466,14 @@ class SimplePipeline:
     
     def step8_upload_thumbnail(self, thumbnail, video_response):
         """Step 8: Upload thumbnail to YouTube Video"""
-        print("Step 8: Uploading Thumbnail")
+        print("Step 8: Saving to thumbnail files, and Uploading Thumbnail")
         
         # Parse video ID from response
         id = video_response[0]['id']
+        
+        # Save thumbnail with ID name
+        thumbnail_image =  ImageClip(thumbnail)
+        thumbnail_image.save_frame(self.thumbnail_dir / f"{id}.png")
         
         try:
             # Authenticate using YouTube API
@@ -498,6 +539,29 @@ class SimplePipeline:
         except Exception as e:
             print(f"Pipeline failed: {e}")
             return None
+        
+    def rectify_thumnbnails(self):
+        thumbnails = list(self.thumbnail_dir.glob("*.png"))
+        
+        for thumbnail in thumbnails:
+            tn = ImageClip(thumbnail)
+            id = str(thumbnail).split('.')[0]
+            
+            try:
+                # Authenticate using YouTube API
+                youtube = self.authenticate_youtube()
+                
+                request = youtube.thumbnails().set(
+                    videoId=id,
+                    media_body=MediaFileUpload(tn, mimetype="image/png")
+                )
+                
+                response = request.execute()
+                
+            except Exception as e:
+                print(f"Error uploading thumbnail: {e}")
+                response = "Error"
+            
 
 def main():
     """Test the pipeline"""

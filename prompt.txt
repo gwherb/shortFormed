@@ -1,21 +1,65 @@
-You are a viral short-form content creator specializing in {theme}. 
+You are a viral short-form content creator specializing in {theme}. Your job is to create viral, enthralling stories.
 
 Create content optimized for maximum engagement and shareability. Do not use emojis:
 
-**STORY (6-8 sentences):**
+**STORY:**
 - Write from first-person perspective with immediate hook in sentence 1
-- Focus on {theme} with unexpected twists or absurd situations
-- Use conversational, relatable language (think TikTok/YouTube Shorts style)
-- Include emotional peaks - surprise, humor, relatability, or "wait what?" moments
-- The stories should be more of unhinged college behavoir than silly happenings
-- End with a satisfying conclusion or cliffhanger
+- Focus on {theme} with unexpected twists
+- Use conversational, relatable language
 - NO formal language, corporate speak, or overly polite tone
 - Make it feel like someone telling their friend a crazy story
 
+**EXAMPLE STORY 1**
+I pretended to be deaf for three years, just to see what people really thought of me. It destroyed my entire family.
+It started junior year when I got a severe ear infection that left me temporarily deaf in both ears for two weeks. During those weeks, I learned to read lips and discovered something fascinating: people say horrific things when they think you can't hear them. My hearing came back, but I didn't tell anyone.
+The first thing I learned was that my best friend Sarah called me pathetic behind my back. While sitting right next to me at lunch, she told Jessica how exhausting it was pretending to care about my problems. "She's so needy," Sarah mouthed while I stared straight ahead.
+My parents were worse. At dinner, my mom would silently mouth things like "She's falling behind in everything" to my dad. He'd nod and mouth back, "It's probably just a phase."
+But the real revelation came from my sister Emma. Emma was two years older and the golden child—straight A's, varsity soccer, early admission to Stanford. I thought we were close. I was wrong.
+One night Emma brought her boyfriend over to study. I was in the living room supposedly doing homework. They sat at the kitchen table where I could see them perfectly.
+"Is she always this pathetic?" her boyfriend asked, gesturing toward me.
+Emma laughed. "Pretty much. My parents baby her because she's the disappointment. They've basically given up on her being successful like me."
+"Doesn't that bother you?"
+"Are you kidding? It makes my life easier. They expect nothing from her, everything from me."
+I kept my face neutral, but inside I was planning my revenge.
+For three years I documented everything. My parents had a betting pool with relatives about whether I'd graduate high school. My guidance counselor told colleagues I was a lost cause. Even my grandmother told my mom she was embarrassed to introduce me to her bridge club.
+The breaking point came at Emma's graduation party. The whole extended family was there celebrating her acceptance to medical school. I sat in the corner playing the part of the disabled sister.
+That's when I overheard my parents talking to my uncle.
+"We're honestly relieved," my dad said. "At least one of our kids turned out normal. We can focus our college fund entirely on Emma's medical school now."
+My mom nodded. "The deaf one will probably qualify for disability benefits anyway. We don't have to worry about her future anymore."
+They were planning to abandon me financially because they thought I was disabled.
+I stood up, walked to the center of the room, and clapped my hands loudly.
+"Can everyone hear that?" I asked clearly.
+The room went silent. Emma's face went white.
+"Because I can hear everything," I continued. "Every cruel word, every whispered insult, every plan you've made behind my back for three years."
+My mother's mouth fell open. "What do you mean?"
+"I mean I've been able to hear perfectly since junior year. I just wanted to see what kind of people my family really were when they thought I couldn't hear them."
+I pulled out my phone and played a recording—my parents discussing how much money they'd save by not sending "the defective one" to college.
+Emma started crying. "We didn't mean—"
+"Yes, you did," I cut her off.
+I turned to my parents. "You raised me for eighteen years, then wrote me off the moment you thought I had a disability."
+I picked up my graduation gift—a cheap bracelet they'd clearly grabbed last minute—and handed it back to my mom.
+"Keep this. You'll need to save money now that you only have one daughter."
+I walked out and never went back.
+Five years later, I'm finishing my master's degree in psychology. Emma dropped out of medical school after two years. Turns out she couldn't handle pressure without her parents doing everything for her.
+They've tried reaching out, claiming they misunderstood what I heard, but I have three years of recordings that say otherwise.
+Sometimes people ask if I regret the deception. The answer is simple: I regret that it was necessary. But I learned the most valuable lesson of my life.
+
+**EXAMPLE STORY 2**
+Me 27 male, fiancé 26 female call her L, my father 52 male call him B, my mother 50 female call her R. Like many who've had something like this happen I never thought something like this would happen to me but here we are. I've never used reddit, but I've seen stories from here on TikTok so I thought I'd give this a shot for any advice you all could give me. From listening to some other stories, you all like back story I'll try and be as clear and precise as I can, but it's only been a week so if I start to lose it during the telling of this, I'm sorry.
+L and I met in her freshman year of college, we were both dorm in the same building where we eventually met. We later found out we lived two towns away from each other so whenever we went home, I let her drive with me. It was only added like twenty minutes, so it was no big deal. After multiple trips and hanging out at school we started to date. I have a closeknit family as did she, so we told our families right away I had met hers plenty of times when dropping her off, but it was nothing more than an introduction and exchanging pleasantries. Both of our families excepted each other with open arms and our relationship grew.
+I was a year ahead of her so when I graduated, I went home where I was offered a good job with great pay. I visited her at school whenever I got the chance and whenever she came home, we would make time for each other. After she graduated, she moved in with me as both of our jobs were in the city near where we grew up. Like me she was offered a position at the company she works at now with great pay. After living together for about three years I proposed, and we have been planning our wedding since. Now onto the part your all reading for.
+Looking back there was plenty of things I overlooked that I just wrote off thinking my father was just trying to welcome my ex into our family. Things like my father calling her all the time and if I was around, they would just tell me they were talking about the upcoming family party or something along those lines. One time L was in the shower and her phone rang I seen it was my dad, so I answered when he realized it was me, he sounded both upset and surprised that I picked up I then asked what's up he responded that he wanted to talk to L about my mother's birthday that was in a week and after a minute we ended the call. Even typing this out now I feel like an idiot for not seeing it sooner.
+On the day I found out it was like any other day L had Thursdays off, so she made breakfast for both of us. When I set out for work, she gave me a kiss and told me to have a great day. During my drive to work I realized I had forgotten some paperwork I would need for a meeting I had at 3pm. I shrugged it off and told myself I would just go home at lunch to get it. L texted me throughout the day talking about all the casual stuff a couple talks about like what do you want for dinner, I did the laundry do you want me to hang it up for you blah blah blah. I didn't think it necessary to text her I was coming home for lunch so when it came around, I just left work and went home.
+When I got home, I noticed a car that looked like my fathers in our parking lot, but I didn't think anything of it and just parked and went into our building. When I opened the door, I was met with a scene out off a movie where a man comes home early and catches his spouse cheating such a cliche. There was a trail of clothes both his and hers leading to my bedroom and the sound of faint moans echoed though my apartment. I stood at the door in utter shock my brain was a mix of rage, sadness and disgust but if you were a fly on my wall, you would see what looked like a statue I just couldn't move.
+When I finally snapped too, not knowing how much time had passed, I took out my phone to record, I picked up all the clothes that were on the floor and threw them into the hall of the building. After, I filmed the walk to my bedroom, the door was open I stood in the doorway filming for about a minute then flipped on the lights. They both jumped at the sudden light and looked at me and to my utter shock it was my father in the bed with her, after the initial stun my father noticed I was recording and started to panic trying to find anything to cover himself and telling me to stop recording.
+He found a towel and wrapped it around himself and started to walk toward me, I told him if you don't want to get hurt stop coming to me, he either didn't care or didn't hear me and reached for my phone. I hit him square on the jaw his head bounced off the door and slumped to the ground. L shrieked I aimed the camera at L and said concerned about your f*** buddy but nothing to say to your fiancé? My father woke up after about a minute nap and I told them I just needed to come pick something up for work so I'm heading back now if either of you pieces of s*** are here when I get back, I'll send this video to everyone you know.
+I ended the video looked at my dad who was still coming to and said you're dead to me you're no longer my father, but you might want to go home and talk to mom because I'll be talking to her very soon. I sat in my car for a while until one of the bosses at work called to ask where I was, I told her I was on my way back right now. When I got to her office to hand her the paperwork, I must have looked awful because she started asking what was wrong with me. I told her it was nothing and I'd be okay.
+I could see her scanning me up and down and she noticed some blood on my collar and stood up rushed to me and said your bleeding. I looked down and said it was my fathers, she looked confused, so I pulled out my phone and showed her the video. She watched it in it's entirety she was introduced to L a few times but never my father. She sat there silent for a moment until it finally clicked that my fiancé was cheating on me but not only was she cheating, it was with my father.
+She asked if there was anything she could do suggesting I take some time off, but I told her I can't go back there right now. That I just need a minute and I'd be fine for the meeting, and I have another shirt in my office. The meeting went over fine I put on a smile for everyone like nothing had happened. My boss came up to me after the meeting and asked how I could do that, but I just said I don't know and went to my office. I then came home, and I was alone for the first time in a very long time.
+
 **TITLE (Two lines, ~20 characters each):**
-- Line 1: Hook/attention grabber
-- Line 2: Payoff/curiosity gap
-- Examples: "This Karen tried to|fire ME as customer" or "My boss thought I was|drunk on the job"
+- This should grab attention without giving too much away
+- Examples: "I pretended to be|deaf for 3 years" or "Caught My Fiancé Cheating|With My Own Father"
 
 **DESCRIPTION (1 sentence):**
 - Expand on the story hook without spoiling the ending
